@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#091426">
+<title>Smart Mirror</title>
+<style>
+:root{color-scheme:dark;--bg:#07111f;--panel:#101f35;--line:#263b59;--blue:#5b8cff;--muted:#a9b8ce}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at top,#142b4c,var(--bg) 65%);font:16px system-ui;color:#f4f7fc;display:grid;place-items:center;padding:22px}
+main{width:min(100%,460px);background:#0e1b2e;border:1px solid var(--line);border-radius:26px;padding:28px;box-shadow:0 20px 70px #0008}
+.logo{width:54px;height:54px;border-radius:17px;background:#1d3b68;display:grid;place-items:center;font-size:26px;margin-bottom:18px}
+h1{margin:0;font-size:29px}p{color:var(--muted);line-height:1.5}
+.tabs{display:flex;gap:8px;margin:24px 0 18px}.tab{flex:1;border:1px solid var(--line);background:#12233a;color:#c9d6e8;padding:12px;border-radius:13px;font-weight:650}
+.tab.active{background:#244b87;border-color:#5b8cff;color:white}
+label{display:block;margin:14px 0 8px;color:#d9e4f4;font-size:14px}
+input{width:100%;padding:16px;border-radius:14px;border:1px solid #355071;background:#081426;color:white;font-size:20px;outline:none}
+input:focus{border-color:var(--blue)}button.primary{width:100%;margin-top:16px;padding:16px;border:0;border-radius:14px;background:var(--blue);color:white;font-size:16px;font-weight:750}
+small{display:block;color:var(--muted);line-height:1.5;margin-top:16px}.status{min-height:24px;margin-top:12px;color:#ffd479;font-size:14px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<main>
+  <div class="logo">▣</div>
+  <h1>Smart Mirror</h1>
+  <p>Conecte este dispositivo à tela compartilhada pelo celular.</p>
+  <div class="tabs">
+    <button class="tab active" id="codeTab" type="button">Código</button>
+    <button class="tab" id="ipTab" type="button">Endereço IP</button>
+  </div>
+  <section id="codePanel">
+    <label for="code">Código de 4 dígitos</label>
+    <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="0000">
+    <button class="primary" id="connectCode">Conectar por código</button>
+  </section>
+  <section id="ipPanel" class="hidden">
+    <label for="ip">Endereço IP do celular</label>
+    <input id="ip" inputmode="url" placeholder="192.168.1.20:8080">
+    <button class="primary" id="connectIp">Conectar por IP</button>
+  </section>
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+  <small>Para conexão por IP, os dispositivos precisam estar na mesma rede Wi-Fi ou hotspot. A transmissão de vídeo é feita diretamente pela rede local.</small>
+</main>
+<script>
+/* Depois de publicar o Worker, coloque aqui a URL dele, por exemplo:
+   https://smartmirror-pairing.SEUNOME.workers.dev */
+const API_BASE = "COLOQUE_A_URL_DO_WORKER_AQUI";
+const $ = id => document.getElementById(id);
+function switchTab(which){
+  const code = which === "code";
+  $("codePanel").classList.toggle("hidden",!code);
+  $("ipPanel").classList.toggle("hidden",code);
+  $("codeTab").classList.toggle("active",code);
+  $("ipTab").classList.toggle("active",!code);
+  $("status").textContent="";
+}
+$("codeTab").onclick=()=>switchTab("code");
+$("ipTab").onclick=()=>switchTab("ip");
+function openReceiver(address){
+  let value=address.trim();
+  if(!/^https?:\/\//i.test(value)) value="http://"+value;
+  if(!/:\d+(\/|$)/.test(value.replace(/^https?:\/\//i,""))) value=value.replace(/\/?$/,"")+":8080";
+  if(!/^https?:\/\/[\w.-]+:\d{1,5}(\/.*)?$/i.test(value)){ $("status").textContent="Endereço inválido. Confira o IP e a porta.";return; }
+  location.href=value;
+}
+$("connectIp").onclick=()=>openReceiver($("ip").value);
+$("ip").addEventListener("keydown",e=>{if(e.key==="Enter")$("connectIp").click()});
+$("code").addEventListener("input",()=>{$("code").value=$("code").value.replace(/\D/g,"").slice(0,4)});
+$("code").addEventListener("keydown",e=>{if(e.key==="Enter")$("connectCode").click()});
+$("connectCode").onclick=async()=>{
+  const code=$("code").value;
+  if(!/^\d{4}$/.test(code)){ $("status").textContent="Digite os 4 números do código.";return; }
+  if(API_BASE.includes("COLOQUE_")){$("status").textContent="O serviço de códigos ainda precisa ser publicado e configurado.";return;}
+  $("status").textContent="Procurando o celular…";
+  try{
+    const r=await fetch(API_BASE.replace(/\/$/,"")+"/lookup?code="+encodeURIComponent(code));
+    const data=await r.json();
+    if(!r.ok) throw new Error(data.error||"Código não encontrado ou expirado.");
+    openReceiver(data.url);
+  }catch(e){$("status").textContent=e.message||"Não foi possível localizar o celular.";}
+};
+</script>
+</body>
+</html>
